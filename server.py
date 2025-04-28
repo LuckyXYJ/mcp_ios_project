@@ -4,6 +4,7 @@ import subprocess
 from typing import Any
 import httpx
 import ast
+import shutil
 from mcp.server.fastmcp import FastMCP
 
 # 创建 MCP 实例
@@ -119,18 +120,19 @@ def setupCodeInfo(rootPath: str) -> dict:
             stderr = result.stderr
 
             # 删除 .git 文件夹
-            git_folder = Path(".code_info/.git")
+            git_folder = Path(os.path.join(rootPath, ".code_info/.git"))
             if git_folder.exists():
-                for item in git_folder.iterdir():
-                    if item.is_dir():
-                        os.rmdir(item)
-                    else:
-                        item.unlink()
-                git_folder.rmdir()
+                shutil.rmtree(git_folder)
+                # for item in git_folder.iterdir():
+                #     if item.is_dir():
+                #         os.rmdir(item)
+                #     else:
+                #         item.unlink()
+                # git_folder.rmdir()
 
             # 生成文件树并追加到 .code_info/project.md
             file_tree = get_file_tree(rootPath)
-            project_md_path = Path(".code_info/project.md")
+            project_md_path = Path(os.path.join(rootPath, ".code_info/project.md"))
             with project_md_path.open("a", encoding="utf-8") as f:
                 f.write(f"\n```\n{file_tree}\n```\n")
 
@@ -190,85 +192,85 @@ async def get_file_tree(root_path: str) -> str:
     return "\n".join(tree)
 
 
-@mcp.tool()
-async def get_alerts(state: str) -> str:
-    """Get weather alerts for a US state.
+# @mcp.tool()
+# async def get_alerts(state: str) -> str:
+#     """Get weather alerts for a US state.
 
-    Args:
-        state: Two-letter US state code (e.g. CA, NY)
-    """
-    url = f"{NWS_API_BASE}/alerts/active/area/{state}"
-    data = await make_nws_request(url)
+#     Args:
+#         state: Two-letter US state code (e.g. CA, NY)
+#     """
+#     url = f"{NWS_API_BASE}/alerts/active/area/{state}"
+#     data = await make_nws_request(url)
 
-    if not data or "features" not in data:
-        return "Unable to fetch alerts or no alerts found."
+#     if not data or "features" not in data:
+#         return "Unable to fetch alerts or no alerts found."
 
-    if not data["features"]:
-        return "No active alerts for this state."
+#     if not data["features"]:
+#         return "No active alerts for this state."
 
-    alerts = [format_alert(feature) for feature in data["features"]]
-    return "\n---\n".join(alerts)
+#     alerts = [format_alert(feature) for feature in data["features"]]
+#     return "\n---\n".join(alerts)
 
-@mcp.tool()
-async def get_forecast(latitude: float, longitude: float) -> str:
-    """Get weather forecast for a location.
+# @mcp.tool()
+# async def get_forecast(latitude: float, longitude: float) -> str:
+#     """Get weather forecast for a location.
 
-    Args:
-        latitude: Latitude of the location
-        longitude: Longitude of the location
-    """
-    # First get the forecast grid endpoint
-    points_url = f"{NWS_API_BASE}/points/{latitude},{longitude}"
-    points_data = await make_nws_request(points_url)
+#     Args:
+#         latitude: Latitude of the location
+#         longitude: Longitude of the location
+#     """
+#     # First get the forecast grid endpoint
+#     points_url = f"{NWS_API_BASE}/points/{latitude},{longitude}"
+#     points_data = await make_nws_request(points_url)
 
-    if not points_data:
-        return "Unable to fetch forecast data for this location."
+#     if not points_data:
+#         return "Unable to fetch forecast data for this location."
 
-    # Get the forecast URL from the points response
-    forecast_url = points_data["properties"]["forecast"]
-    forecast_data = await make_nws_request(forecast_url)
+#     # Get the forecast URL from the points response
+#     forecast_url = points_data["properties"]["forecast"]
+#     forecast_data = await make_nws_request(forecast_url)
 
-    if not forecast_data:
-        return "Unable to fetch detailed forecast."
+#     if not forecast_data:
+#         return "Unable to fetch detailed forecast."
 
-    # Format the periods into a readable forecast
-    periods = forecast_data["properties"]["periods"]
-    forecasts = []
-    for period in periods[:5]:  # Only show next 5 periods
-        forecast = f"""
-{period['name']}:
-Temperature: {period['temperature']}°{period['temperatureUnit']}
-Wind: {period['windSpeed']} {period['windDirection']}
-Forecast: {period['detailedForecast']}
-"""
-        forecasts.append(forecast)
+#     # Format the periods into a readable forecast
+#     periods = forecast_data["properties"]["periods"]
+#     forecasts = []
+#     for period in periods[:5]:  # Only show next 5 periods
+#         forecast = f"""
+# {period['name']}:
+# Temperature: {period['temperature']}°{period['temperatureUnit']}
+# Wind: {period['windSpeed']} {period['windDirection']}
+# Forecast: {period['detailedForecast']}
+# """
+#         forecasts.append(forecast)
 
-    return "\n---\n".join(forecasts)
+#     return "\n---\n".join(forecasts)
 
-async def make_nws_request(url: str) -> dict[str, Any] | None:
-    """Make a request to the NWS API with proper error handling."""
-    headers = {
-        "User-Agent": USER_AGENT,
-        "Accept": "application/geo+json"
-    }
-    async with httpx.AsyncClient() as client:
-        try:
-            response = await client.get(url, headers=headers, timeout=30.0)
-            response.raise_for_status()
-            return response.json()
-        except Exception:
-            return None
+# async def make_nws_request(url: str) -> dict[str, Any] | None:
+#     """Make a request to the NWS API with proper error handling."""
+#     headers = {
+#         "User-Agent": USER_AGENT,
+#         "Accept": "application/geo+json"
+#     }
+#     async with httpx.AsyncClient() as client:
+#         try:
+#             response = await client.get(url, headers=headers, timeout=30.0)
+#             response.raise_for_status()
+#             return response.json()
+#         except Exception:
+#             return None
 
-def format_alert(feature: dict) -> str:
-    """Format an alert feature into a readable string."""
-    props = feature["properties"]
-    return f"""
-Event: {props.get('event', 'Unknown')}
-Area: {props.get('areaDesc', 'Unknown')}
-Severity: {props.get('severity', 'Unknown')}
-Description: {props.get('description', 'No description available')}
-Instructions: {props.get('instruction', 'No specific instructions provided')}
-"""
+# def format_alert(feature: dict) -> str:
+#     """Format an alert feature into a readable string."""
+#     props = feature["properties"]
+#     return f"""
+# Event: {props.get('event', 'Unknown')}
+# Area: {props.get('areaDesc', 'Unknown')}
+# Severity: {props.get('severity', 'Unknown')}
+# Description: {props.get('description', 'No description available')}
+# Instructions: {props.get('instruction', 'No specific instructions provided')}
+# """
 
 # 示例资源
 # @mcp.resource("greeting://{name}")
@@ -306,10 +308,10 @@ def generate_project_summary(root_path: str) -> dict:
     """
     Recursively read all code files in the project,
     extract classes, methods, functions and comments,
-    and save a structured markdown summary into `.codelf/docs/`.
+    and save a structured markdown summary into `.code_info/docs/`.
     """
     result = extract_all_code_info(root_path)
-    output_path = os.path.join(root_path, ".codelf", "docs")
+    output_path = os.path.join(root_path, ".code_info", "docs")
     os.makedirs(output_path, exist_ok=True)
 
     for file_path, summary in result.items():
